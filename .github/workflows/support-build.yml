@@ -131,11 +131,23 @@ jobs:
           from pathlib import Path
 
           root = Path("out")
+          def _target(name):
+              for platform in ("windows", "macos", "linux"):
+                  if f"-{platform}-" in name:
+                      for arch in ("x86_64", "aarch64"):
+                          if name.endswith(f"-{arch}.zip") or name.endswith(f"-{arch}.tar.gz"):
+                              return platform, arch
+              raise SystemExit(f"unerkannter Artefaktname: {name}")
+
           assets = []
           for item in sorted(root.iterdir()):
-              if item.is_file():
+              if item.is_file() and item.name != "manifest.json":
+                  platform, arch = _target(item.name)
                   assets.append({
                       "name": item.name,
+                      "platform": platform,
+                      "arch": arch,
+                      "format": "portable",
                       "sha256": hashlib.sha256(item.read_bytes()).hexdigest(),
                       "size": item.stat().st_size,
                   })
