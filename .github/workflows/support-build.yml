@@ -15,6 +15,11 @@ on:
         description: "Expected BetterDesk-Client commit"
         required: true
         type: string
+      targets_json:
+        description: "Requested targets (informational)"
+        required: false
+        type: string
+        default: "[]"
 
 permissions:
   contents: read
