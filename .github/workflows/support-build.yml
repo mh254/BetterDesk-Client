@@ -91,8 +91,14 @@ jobs:
           mkdir -p out
 
           for arch in x86_64 aarch64; do
-            src="$(find "raw/windows" -type d -path "*rustdesk-unsigned-windows-${arch}/rustdesk" -print -quit)"
-            test -n "${src}"
+            base="$(find "raw/windows" -maxdepth 3 -type d -name "rustdesk-unsigned-windows-${arch}" -print -quit)"
+            test -n "${base}"
+            if [ -d "${base}/rustdesk" ]; then
+              src="${base}/rustdesk"
+            else
+              src="${base}"
+            fi
+            test -n "$(find "${src}" -maxdepth 1 -type f -iname '*.exe' -print -quit)"
             mkdir -p "stage/windows-${arch}"
             cp -a "${src}/." "stage/windows-${arch}/"
             if find "stage/windows-${arch}" -iname custom.txt -o -name .custom-txt-here | grep -q .; then
