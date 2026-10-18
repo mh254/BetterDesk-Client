@@ -81,6 +81,13 @@ jobs:
           path: raw/linux-aarch64
           merge-multiple: true
 
+      - name: Download Linux rpm bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: betterdesk-*-rpms
+          path: raw/rpm
+          merge-multiple: true
+
       - name: Package embedded Support artifacts
         shell: bash
         env:
@@ -132,28 +139,61 @@ jobs:
             tar -C "stage/linux-${arch}" -czf "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.tar.gz" root
           done
 
+          # deb/rpm/arch als eigene Assets — die Konsole adressiert jedes Ziel einzeln
+          for arch in x86_64 aarch64; do
+            deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit)"
+            test -n "${deb}"
+            cp -f "${deb}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.deb"
+            rpm="$(find raw/rpm -maxdepth 1 -type f -name "*.${arch}.rpm" ! -name '*-suse.rpm' -print -quit)"
+            test -n "${rpm}"
+            cp -f "${rpm}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm"
+            root="stage/arch-${arch}"
+            rm -rf "${root}"
+            mkdir -p "${root}"
+            dpkg-deb -x "${deb}" "${root}"
+            printf '%s\n' \
+              'pkgname = betterdesk-support' \
+              'pkgbase = betterdesk-support' \
+              'pkgver = 0.0.0-1' \
+              'pkgdesc = BetterDesk Support client' \
+              'url = https://betterdesk.eu' \
+              'builddate = 1791158400' \
+              'packager = BetterDesk' \
+              "arch = ${arch}" \
+              > "${root}/.PKGINFO"
+            tar --zstd -C "${root}" -cf "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.pkg.tar.zst" .
+          done
+
           python3 - <<'PY'
           import hashlib, json, os
           from pathlib import Path
 
           root = Path("out")
+          ENDUNGEN = (
+              (".pkg.tar.zst", "arch"),
+              (".tar.gz", "portable"),
+              (".deb", "deb"),
+              (".rpm", "rpm"),
+              (".zip", "portable"),
+          )
           def _target(name):
               for platform in ("windows", "macos", "linux"):
                   if f"-{platform}-" in name:
                       for arch in ("x86_64", "aarch64"):
-                          if name.endswith(f"-{arch}.zip") or name.endswith(f"-{arch}.tar.gz"):
-                              return platform, arch
+                          for endung, format_ in ENDUNGEN:
+                              if name.endswith(f"-{arch}{endung}"):
+                                  return platform, arch, format_
               raise SystemExit(f"unerkannter Artefaktname: {name}")
 
           assets = []
           for item in sorted(root.iterdir()):
               if item.is_file() and item.name != "manifest.json":
-                  platform, arch = _target(item.name)
+                  platform, arch, format_ = _target(item.name)
                   assets.append({
                       "name": item.name,
                       "platform": platform,
                       "arch": arch,
-                      "format": "portable",
+                      "format": format_,
                       "sha256": hashlib.sha256(item.read_bytes()).hexdigest(),
                       "size": item.stat().st_size,
                   })
