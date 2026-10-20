@@ -53,6 +53,14 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout (Lizenz)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.client_commit }}
+          sparse-checkout: |
+            LICENCE
+          sparse-checkout-cone-mode: false
+
       - name: Download Windows builds
         uses: actions/download-artifact@v4
         with:
@@ -108,6 +116,7 @@ jobs:
             test -n "$(find "${src}" -maxdepth 1 -type f -iname '*.exe' -print -quit)"
             mkdir -p "stage/windows-${arch}"
             cp -a "${src}/." "stage/windows-${arch}/"
+            cp LICENCE "stage/windows-${arch}/LICENCE.txt"
             if find "stage/windows-${arch}" -iname custom.txt -o -name .custom-txt-here | grep -q .; then
               echo "External config found in Windows artifact" >&2
               exit 1
@@ -120,6 +129,7 @@ jobs:
             test -n "${archive}"
             mkdir -p "stage/macos-${arch}"
             tar -xzf "${archive}" -C "stage/macos-${arch}"
+            cp LICENCE "stage/macos-${arch}/LICENCE"
             if find "stage/macos-${arch}" -iname custom.txt -o -name .custom-txt-here | grep -q .; then
               echo "External config found in macOS artifact" >&2
               exit 1
@@ -132,6 +142,7 @@ jobs:
             test -n "${deb}"
             mkdir -p "stage/linux-${arch}/root"
             dpkg-deb -x "${deb}" "stage/linux-${arch}/root"
+            cp LICENCE "stage/linux-${arch}/root/opt/betterdesk-support/LICENCE"
             if find "stage/linux-${arch}" -iname custom.txt -o -name .custom-txt-here | grep -q .; then
               echo "External config found in Linux artifact" >&2
               exit 1
@@ -151,6 +162,7 @@ jobs:
             rm -rf "${root}"
             mkdir -p "${root}"
             dpkg-deb -x "${deb}" "${root}"
+            cp LICENCE "${root}/opt/betterdesk-support/LICENCE"
             printf '%s\n' \
               'pkgname = betterdesk-support' \
               'pkgbase = betterdesk-support' \
