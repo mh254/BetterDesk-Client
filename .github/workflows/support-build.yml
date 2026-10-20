@@ -59,6 +59,7 @@ jobs:
           ref: ${{ inputs.client_commit }}
           sparse-checkout: |
             LICENCE
+            tools/rpm-lizenz.sh
           sparse-checkout-cone-mode: false
 
       - name: Download Windows builds
