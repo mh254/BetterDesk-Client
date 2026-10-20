@@ -142,7 +142,8 @@ jobs:
             test -n "${deb}"
             mkdir -p "stage/linux-${arch}/root"
             dpkg-deb -x "${deb}" "stage/linux-${arch}/root"
-            cp LICENCE "stage/linux-${arch}/root/opt/betterdesk-support/LICENCE"
+            mkdir -p "stage/linux-${arch}/root/usr/share/doc/betterdesk"
+            cp LICENCE "stage/linux-${arch}/root/usr/share/doc/betterdesk/LICENCE"
             if find "stage/linux-${arch}" -iname custom.txt -o -name .custom-txt-here | grep -q .; then
               echo "External config found in Linux artifact" >&2
               exit 1
@@ -155,14 +156,38 @@ jobs:
             deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit)"
             test -n "${deb}"
             cp -f "${deb}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.deb"
+            # LICENCE ins deb: dpkg-deb -R/-b erhaelt Control-Daten und Metadaten
+            W="$(mktemp -d)"
+            dpkg-deb -R "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.deb" "${W}/root"
+            mkdir -p "${W}/root/usr/share/doc/betterdesk"
+            cp LICENCE "${W}/root/usr/share/doc/betterdesk/LICENCE"
+            cp LICENCE "${W}/root/usr/share/doc/betterdesk/copyright"
+            ( cd "${W}/root" && find . -type f ! -path './DEBIAN/*' -printf '%P\n' \
+              | while read -r f; do printf '%s  %s\n' "$(md5sum "$f" | cut -d' ' -f1)" "$f"; done > DEBIAN/md5sums )
+            dpkg-deb -b "${W}/root" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.deb"
+            rm -rf "${W}"
             rpm="$(find raw/rpm -maxdepth 1 -type f -name "*.${arch}.rpm" ! -name '*-suse.rpm' -print -quit)"
             test -n "${rpm}"
             cp -f "${rpm}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm"
+            # RPM laesst sich nicht wie deb neu schnueren; rpm2cpio + rpmbuild
+            # mit uebernommener Dateiliste haelt Requires und Scriptlets.
+            if ! command -v rpmbuild >/dev/null 2>&1 && [ -z "${RPM_TOOLS:-}" ]; then
+              RPM_TOOLS=1
+              sudo apt-get update -qq >/dev/null 2>&1 || true
+              sudo apt-get install -y -qq rpm >/dev/null 2>&1 || true
+            fi
+            if command -v rpmbuild >/dev/null 2>&1 && command -v rpm2cpio >/dev/null 2>&1; then
+              bash tools/rpm-lizenz.sh "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm" \
+                ./LICENCE "/usr/share/doc/betterdesk/LICENCE"
+            else
+              echo "WARNUNG: rpmbuild fehlt, RPM ohne LICENCE" >&2
+            fi
             root="stage/arch-${arch}"
             rm -rf "${root}"
             mkdir -p "${root}"
             dpkg-deb -x "${deb}" "${root}"
-            cp LICENCE "${root}/opt/betterdesk-support/LICENCE"
+            mkdir -p "${root}/usr/share/doc/betterdesk"
+            cp LICENCE "${root}/usr/share/doc/betterdesk/LICENCE"
             printf '%s\n' \
               'pkgname = betterdesk-support' \
               'pkgbase = betterdesk-support' \
