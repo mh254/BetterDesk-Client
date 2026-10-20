@@ -174,9 +174,10 @@ jobs:
             if ! command -v rpmbuild >/dev/null 2>&1 && [ -z "${RPM_TOOLS:-}" ]; then
               RPM_TOOLS=1
               sudo apt-get update -qq >/dev/null 2>&1 || true
-              sudo apt-get install -y -qq rpm >/dev/null 2>&1 || true
+              sudo apt-get install -y -qq rpm cpio >/dev/null 2>&1 || true
             fi
-            if command -v rpmbuild >/dev/null 2>&1 && command -v rpm2cpio >/dev/null 2>&1; then
+            if command -v rpmbuild >/dev/null 2>&1 && command -v rpm2cpio >/dev/null 2>&1 \
+               && command -v cpio >/dev/null 2>&1; then
               bash tools/rpm-lizenz.sh "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm" \
                 ./LICENCE "/usr/share/doc/betterdesk/LICENCE"
             else
