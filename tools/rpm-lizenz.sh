@@ -38,7 +38,6 @@ spec="$W/top/SPECS/$name.spec"
     echo "License: $lizenz"
     [ -n "$gruppe" ] && echo "Group: $gruppe"
     [ -n "$url" ] && echo "URL: $url"
-    echo "BuildArch: $arch"
     echo "AutoReqProv: no"
     echo ""
     rpm -qpR "$src" 2>/dev/null | grep -v '^rpmlib(' | sort -u | sed 's/^/Requires: /' || true
@@ -81,8 +80,10 @@ spec="$W/top/SPECS/$name.spec"
     echo "$ziel"
 } > "$spec"
 
+# --target ist Pflicht: ein aarch64-RPM laesst sich auf einem x86_64-Runner sonst
+# nicht bauen ("error: No compatible architectures found for build").
 if ! rpmbuild --define "_topdir $W/top" --define "_build_id_links none" \
-        -bb "$spec" > "$W/rpmbuild.log" 2>&1; then
+        --target "$arch" -bb "$spec" > "$W/rpmbuild.log" 2>&1; then
     echo "FEHLER: rpmbuild ist gescheitert:" >&2
     tail -15 "$W/rpmbuild.log" >&2
     exit 1
