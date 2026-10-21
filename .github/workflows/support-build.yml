@@ -170,17 +170,21 @@ jobs:
             rpm="$(find raw/rpm -maxdepth 1 -type f -name "*.${arch}.rpm" ! -name '*-suse.rpm' -print -quit)"
             test -n "${rpm}"
             cp -f "${rpm}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm"
-            # RPM laesst sich nicht wie deb neu schnueren; rpm2cpio + rpmbuild
-            # mit uebernommener Dateiliste haelt Requires und Scriptlets.
-            if ! command -v rpmbuild >/dev/null 2>&1 && [ -z "${RPM_TOOLS:-}" ]; then
-              RPM_TOOLS=1
-              sudo apt-get update -qq >/dev/null 2>&1 || true
-              sudo apt-get install -y -qq rpm cpio >/dev/null 2>&1 || true
+            # RPM laesst sich nicht wie deb neu schnuern: rpm2cpio + rpmbuild mit
+            # uebernommener Dateiliste haelt Requires und Scriptlets.
+            # Jede Zeile hier ist absichtlich laut — ein stummer Block hat am 20.10.
+            # zwei Laeufe gekostet, in denen niemand sagen konnte, ob er lief.
+            if ! command -v rpmbuild >/dev/null 2>&1; then
+              echo "RPM ${arch}: rpmbuild fehlt, installiere rpm + cpio"
+              sudo apt-get update -qq || true
+              sudo apt-get install -y rpm cpio || true
             fi
+            echo "RPM ${arch}: rpmbuild=$(command -v rpmbuild || echo FEHLT) rpm2cpio=$(command -v rpm2cpio || echo FEHLT) cpio=$(command -v cpio || echo FEHLT)"
             if command -v rpmbuild >/dev/null 2>&1 && command -v rpm2cpio >/dev/null 2>&1 \
                && command -v cpio >/dev/null 2>&1; then
               bash tools/rpm-lizenz.sh "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm" \
-                ./LICENCE "/usr/share/doc/betterdesk/LICENCE"
+                ./LICENCE "/usr/share/doc/betterdesk/LICENCE" \
+                || echo "FEHLER: rpm-lizenz.sh Exit $? — RPM bleibt ohne LICENCE"
             else
               echo "WARNUNG: rpmbuild fehlt, RPM ohne LICENCE" >&2
             fi
