@@ -82,7 +82,11 @@ spec="$W/top/SPECS/$name.spec"
 
 # --target ist Pflicht: ein aarch64-RPM laesst sich auf einem x86_64-Runner sonst
 # nicht bauen ("error: No compatible architectures found for build").
+# __strip wird neutralisiert: rpmbuild strippt nach %install automatisch, und der
+# strip des x86_64-Runners kann aarch64-ELF nicht lesen ("Unable to recognise the
+# format", "Bad exit status from %install"). Die Dateien bleiben unveraendert.
 if ! rpmbuild --define "_topdir $W/top" --define "_build_id_links none" \
+        --define "__strip /bin/true" \
         --target "$arch" -bb "$spec" > "$W/rpmbuild.log" 2>&1; then
     echo "FEHLER: rpmbuild ist gescheitert:" >&2
     tail -15 "$W/rpmbuild.log" >&2
