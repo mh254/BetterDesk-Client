@@ -90,6 +90,13 @@ jobs:
           path: raw/linux-aarch64
           merge-multiple: true
 
+      - name: Download linux bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: betterdesk-unsigned-linux-bundle-*
+          path: raw/linux-bundles
+          merge-multiple: true
+
       - name: Download Linux rpm bundles
         uses: actions/download-artifact@v4
         with:
@@ -140,16 +147,25 @@ jobs:
 
           for arch in x86_64 aarch64; do
             deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit)"
+            bundle_tar="$(find raw/linux-bundles -type f -name "*${arch}*.tar.gz" -print -quit)"
             test -n "${deb}"
-            mkdir -p "stage/linux-${arch}/root"
+            test -n "${bundle_tar}" || { echo "::error::linux ${arch}: bundle fehlt" >&2; exit 1; }
+            mkdir -p "stage/linux-${arch}/root" "stage/linux-${arch}/portable"
             dpkg-deb -x "${deb}" "stage/linux-${arch}/root"
             mkdir -p "stage/linux-${arch}/root/usr/share/doc/betterdesk"
             cp LICENCE "stage/linux-${arch}/root/usr/share/doc/betterdesk/LICENCE"
+            tar -xzf "${bundle_tar}" -C "stage/linux-${arch}/portable" --strip-components=1 --no-same-owner
+            test -x "stage/linux-${arch}/portable/betterdesk" || { echo "::error::linux ${arch}: betterdesk fehlt" >&2; exit 1; }
+            test -n "$(ls -A "stage/linux-${arch}/portable/lib")" || { echo "::error::linux ${arch}: lib leer" >&2; exit 1; }
+            # files/ (polkit, systemd) liegt nur im deb
+            cp -a "stage/linux-${arch}/root/usr/share/rustdesk/files" "stage/linux-${arch}/portable/files"
+            cp LICENCE "stage/linux-${arch}/portable/LICENCE"
             if find "stage/linux-${arch}" -iname custom.txt -o -name .custom-txt-here | grep -q .; then
               echo "External config found in Linux artifact" >&2
               exit 1
             fi
-            tar -C "stage/linux-${arch}" -czf "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.tar.gz" root
+            tar -C stage --owner=0 --group=0 --numeric-owner \
+              -czf "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.tar.gz" "linux-${arch}"
           done
 
           # deb/rpm/arch als eigene Assets — die Konsole adressiert jedes Ziel einzeln
