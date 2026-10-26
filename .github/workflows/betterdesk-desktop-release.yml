@@ -156,6 +156,13 @@ jobs:
           path: dist-raw/linux-debs
           merge-multiple: true
 
+      - name: Download linux bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: betterdesk-unsigned-linux-bundle-*
+          path: dist-raw/linux-bundles
+          merge-multiple: true
+
       - name: Download Linux rpms
         uses: actions/download-artifact@v4
         with:
@@ -226,25 +233,28 @@ jobs:
 
           for arch in x86_64 aarch64; do
             deb=$(find dist-raw/linux-debs -name "*${arch}*.deb" 2>/dev/null | head -n1 || true)
-            if [ -n "${deb}" ]; then
+            bundle_tar=$(find dist-raw/linux-bundles -type f -name "*${arch}*.tar.gz" 2>/dev/null | head -n1 || true)
+            if [ -n "${deb}" ] && [ -n "${bundle_tar}" ]; then
               cp "${deb}" "dist/clean/betterdesk-${VERSION}-linux-${arch}.deb"
               mkdir -p "dist/linux-${arch}"
               if command -v dpkg-deb >/dev/null; then
                 dpkg-deb -x "${deb}" "dist/linux-${arch}/root"
-                bin=$(find "dist/linux-${arch}/root" -type f \( -name betterdesk -o -name rustdesk \) | head -n1 || true)
-                if [ -n "${bin}" ]; then
-                  stage="dist/linux-${arch}/portable"
-                  mkdir -p "${stage}"
-                  cp -a "$(dirname "${bin}")/." "${stage}/"
-                  if [ -f "${stage}/rustdesk" ] && [ ! -f "${stage}/betterdesk" ]; then
-                    mv "${stage}/rustdesk" "${stage}/betterdesk"
-                  fi
-                  rm -f "${stage}/custom.txt"
-                  tar -C "${stage}" -czf "dist/clean/betterdesk-${VERSION}-linux-${arch}-portable.tar.gz" .
-                fi
+                stage="dist/linux-${arch}/portable"
+                mkdir -p "${stage}"
+                tar -xzf "${bundle_tar}" -C "${stage}" --strip-components=1 --no-same-owner
+                test -x "${stage}/betterdesk" || { echo "::error::portable ${arch}: betterdesk fehlt" >&2; exit 1; }
+                test -n "$(ls -A "${stage}/lib")" || { echo "::error::portable ${arch}: lib leer" >&2; exit 1; }
+                # files/ (polkit, systemd) liegt nur im deb — sonst fehlen 4 Eintraege
+                cp -a "dist/linux-${arch}/root/usr/share/rustdesk/files" "${stage}/files"
+                rm -f "${stage}/custom.txt"
+                tar -C "${stage}" --owner=0 --group=0 --numeric-owner \
+                  -czf "dist/clean/betterdesk-${VERSION}-linux-${arch}-portable.tar.gz" .
               else
                 echo "placeholder" > "dist/linux-${arch}/README.txt"
               fi
+            else
+              echo "::error::linux ${arch}: deb oder bundle fehlt" >&2
+              exit 1
             fi
             # Fedora / openSUSE RPMs when present
             if [ -d dist-raw/linux-rpms ]; then
