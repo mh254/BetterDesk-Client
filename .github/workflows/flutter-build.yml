@@ -971,6 +971,32 @@ jobs:
           name: betterdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
           path: betterdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
 
+      - name: Tar linux bundle
+        if: env.UPLOAD_ARTIFACT == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.job.arch }}" in
+            x86_64)  fdir=x64 ;;
+            aarch64) fdir=arm64 ;;
+            *) echo "unknown arch ${{ matrix.job.arch }}" >&2; exit 1 ;;
+          esac
+          bundle="flutter/build/linux/${fdir}/release/bundle"
+          test -d "${bundle}" || { echo "::error::bundle ${bundle} fehlt" >&2; exit 1; }
+          test -x "${bundle}/betterdesk" || { echo "::error::betterdesk fehlt im bundle" >&2; exit 1; }
+          test -n "$(ls -A "${bundle}/lib")" || { echo "::error::bundle lib leer" >&2; exit 1; }
+          tar -C "$(dirname "${bundle}")" -czf "betterdesk-bundle-${{ matrix.job.arch }}.tar.gz" bundle
+          # kein "| head": SIGPIPE beendet tar (Exit 141) bei pipefail
+          tar -tzf "betterdesk-bundle-${{ matrix.job.arch }}.tar.gz" > /dev/null
+          tar -tzf "betterdesk-bundle-${{ matrix.job.arch }}.tar.gz" | sed -n '1,5p'
+
+      - name: Upload linux bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: env.UPLOAD_ARTIFACT == 'true'
+        with:
+          name: betterdesk-unsigned-linux-bundle-${{ matrix.job.arch }}
+          path: betterdesk-bundle-${{ matrix.job.arch }}.tar.gz
+
       - name: Upload rpm packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: env.UPLOAD_ARTIFACT == 'true'
