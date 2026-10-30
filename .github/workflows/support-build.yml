@@ -51,6 +51,11 @@ jobs:
 
   package:
     needs: build
+    # 59-fork-paketjob: tolerant (30.10.2026)
+    # Auch ausfuehren, wenn ein einzelner Build-Job abbricht oder haengt
+    # (28./29.10.: macOS-Runner). !cancelled() statt always(), damit ein
+    # manuell abgebrochener Lauf keinen halben Paket-Job startet.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout (Lizenz)
@@ -64,6 +69,7 @@ jobs:
 
       - name: Download Windows builds
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: rustdesk-unsigned-windows-*
           path: raw/windows
@@ -71,6 +77,7 @@ jobs:
 
       - name: Download macOS builds
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: betterdesk-unsigned-macos-*
           path: raw/macos
@@ -78,6 +85,7 @@ jobs:
 
       - name: Download Linux x86_64 build
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: betterdesk-*-x86_64.deb
           path: raw/linux-x86_64
@@ -85,6 +93,7 @@ jobs:
 
       - name: Download Linux aarch64 build
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: betterdesk-*-aarch64.deb
           path: raw/linux-aarch64
@@ -92,6 +101,7 @@ jobs:
 
       - name: Download linux bundles
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: betterdesk-unsigned-linux-bundle-*
           path: raw/linux-bundles
@@ -99,6 +109,7 @@ jobs:
 
       - name: Download Linux rpm bundles
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: betterdesk-*-rpms
           path: raw/rpm
@@ -114,8 +125,11 @@ jobs:
           mkdir -p out
 
           for arch in x86_64 aarch64; do
-            base="$(find "raw/windows" -maxdepth 3 -type d -name "rustdesk-unsigned-windows-${arch}" -print -quit)"
-            test -n "${base}"
+            base="$(find "raw/windows" -maxdepth 3 -type d -name "rustdesk-unsigned-windows-${arch}" -print -quit 2>/dev/null || true)"
+            if [ -z "${base}" ]; then
+              echo "::warning::windows ${arch}: kein Build-Artefakt — Ziel bleibt offen"
+              continue
+            fi
             if [ -d "${base}/rustdesk" ]; then
               src="${base}/rustdesk"
             else
@@ -133,8 +147,11 @@ jobs:
           done
 
           for arch in x86_64 aarch64; do
-            archive="$(find "raw/macos" -type f -name "*-${arch}-app.tar.gz" -print -quit)"
-            test -n "${archive}"
+            archive="$(find "raw/macos" -type f -name "*-${arch}-app.tar.gz" -print -quit 2>/dev/null || true)"
+            if [ -z "${archive}" ]; then
+              echo "::warning::macos ${arch}: kein Build-Artefakt — Ziel bleibt offen"
+              continue
+            fi
             mkdir -p "stage/macos-${arch}"
             tar -xzf "${archive}" -C "stage/macos-${arch}"
             cp LICENCE "stage/macos-${arch}/LICENCE"
@@ -146,10 +163,12 @@ jobs:
           done
 
           for arch in x86_64 aarch64; do
-            deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit)"
-            bundle_tar="$(find raw/linux-bundles -type f -name "*${arch}*.tar.gz" -print -quit)"
-            test -n "${deb}"
-            test -n "${bundle_tar}" || { echo "::error::linux ${arch}: bundle fehlt" >&2; exit 1; }
+            deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit 2>/dev/null || true)"
+            bundle_tar="$(find raw/linux-bundles -type f -name "*${arch}*.tar.gz" -print -quit 2>/dev/null || true)"
+            if [ -z "${deb}" ] || [ -z "${bundle_tar}" ]; then
+              echo "::warning::linux ${arch}: deb oder bundle fehlt — Portable/Deb bleiben offen"
+              continue
+            fi
             mkdir -p "stage/linux-${arch}/root" "stage/linux-${arch}/portable"
             dpkg-deb -x "${deb}" "stage/linux-${arch}/root"
             mkdir -p "stage/linux-${arch}/root/usr/share/doc/betterdesk"
@@ -170,8 +189,11 @@ jobs:
 
           # deb/rpm/arch als eigene Assets — die Konsole adressiert jedes Ziel einzeln
           for arch in x86_64 aarch64; do
-            deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit)"
-            test -n "${deb}"
+            deb="$(find "raw/linux-${arch}" -type f -name '*.deb' -print -quit 2>/dev/null || true)"
+            if [ -z "${deb}" ]; then
+              echo "::warning::linux ${arch}: deb fehlt — deb/rpm/arch bleiben offen"
+              continue
+            fi
             cp -f "${deb}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.deb"
             # LICENCE ins deb: dpkg-deb -R/-b erhaelt Control-Daten und Metadaten
             W="$(mktemp -d)"
@@ -183,8 +205,11 @@ jobs:
               | while read -r f; do printf '%s  %s\n' "$(md5sum "$f" | cut -d' ' -f1)" "$f"; done > DEBIAN/md5sums )
             dpkg-deb -b "${W}/root" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.deb"
             rm -rf "${W}"
-            rpm="$(find raw/rpm -maxdepth 1 -type f -name "*.${arch}.rpm" ! -name '*-suse.rpm' -print -quit)"
-            test -n "${rpm}"
+            # 59-fork-paketjob: RPM nur, wenn das Artefakt da ist
+            rpm="$(find raw/rpm -maxdepth 1 -type f -name "*.${arch}.rpm" ! -name '*-suse.rpm' -print -quit 2>/dev/null || true)"
+            if [ -z "${rpm}" ]; then
+              echo "::warning::linux ${arch}: RPM fehlt — Ziel bleibt offen"
+            else
             cp -f "${rpm}" "out/betterdesk-support-${GENERATION_ID}-linux-${arch}.rpm"
             # RPM laesst sich nicht wie deb neu schnuern: rpm2cpio + rpmbuild mit
             # uebernommener Dateiliste haelt Requires und Scriptlets.
@@ -204,6 +229,7 @@ jobs:
             else
               echo "WARNUNG: rpmbuild fehlt, RPM ohne LICENCE" >&2
             fi
+            fi  # 59-fork-paketjob: Ende RPM-Block
             root="stage/arch-${arch}"
             rm -rf "${root}"
             mkdir -p "${root}"
@@ -256,6 +282,9 @@ jobs:
                       "sha256": hashlib.sha256(item.read_bytes()).hexdigest(),
                       "size": item.stat().st_size,
                   })
+          if len(assets) < 12:
+              print(f"::warning::nur {len(assets)} von 12 Assets gebaut — "
+                    "fehlende Ziele bleiben offen")
           manifest = {
               "schema_version": 1,
               "sku": "betterdesk-support",
