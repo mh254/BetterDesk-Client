@@ -107,6 +107,13 @@ jobs:
           path: raw/linux-bundles
           merge-multiple: true
 
+      - name: Download linux bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: betterdesk-unsigned-linux-bundle-*
+          path: raw/linux-bundles
+          merge-multiple: true
+
       - name: Download Linux rpm bundles
         uses: actions/download-artifact@v4
         continue-on-error: true
