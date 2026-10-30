@@ -13,8 +13,7 @@ name: BetterDesk desktop release
 
 on:
   push:
-    branches:
-      - master
+    # 61-fork-push-release: 'branches: - master' entfernt (30.10.2026)
     tags:
       - "desktop/*"
     paths-ignore:
