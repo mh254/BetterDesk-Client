@@ -229,7 +229,6 @@ jobs:
             else
               echo "WARNUNG: rpmbuild fehlt, RPM ohne LICENCE" >&2
             fi
-            fi  # 59-fork-paketjob: Ende RPM-Block
             root="stage/arch-${arch}"
             rm -rf "${root}"
             mkdir -p "${root}"
